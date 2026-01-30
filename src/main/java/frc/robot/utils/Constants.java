@@ -5,9 +5,16 @@ public final class Constants {
         public static final String kTurretLimelightName = "limelight-turret";
     }
     public static class TurretConstants {
-        public static final int kTurretMotorDeviceId = 0;
-        public static final int kEncoderId1 = 0;
-        public static final int kEncoderId2 = 0;
+        public static final int kTurretMotorDeviceId = 60;
+        public static final int kEncoderId1 = 61;
+        public static final int kEncoderId2 = 62;
+        
+        // WHEN SETTING THE MAGNET OFFSET, DO NOT ONLY MAKE THESE ZERO AND THINK YOU ARE DONE
+        // YOU MUST GO TO TURRET.JAVA AND SET THE ACTUAL CONFIGURATOR TO ZERO
+        // IN ORDER TO REMOVE THE MODULUS THING
+        // negative of "raw absolute position", don't add mod amount offset
+        public static final double kEncoder1MagnetOffset = -0.940918 ;
+        public static final double kEncoder2MagnetOffset = -0.768066 ;
         
         // valid range to not destroy turret is [-kTurretRange, kTurretRange]
         public static final double kTurretRange = 270;

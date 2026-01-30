@@ -3,7 +3,9 @@ package frc.robot.subsystems;
 import java.util.Optional;
 
 import com.ctre.phoenix6.CANBus;
+import com.ctre.phoenix6.configs.CANcoderConfiguration;
 import com.ctre.phoenix6.hardware.CANcoder;
+import com.ctre.phoenix6.signals.SensorDirectionValue;
 
 import edu.wpi.first.math.controller.PIDController;
 import edu.wpi.first.math.geometry.Pose2d;
@@ -38,11 +40,42 @@ public class Turret extends SubsystemBase {
         CANBus canbus = new CANBus();
 
         turretMotor = new Kraken(TurretConstants.kTurretMotorDeviceId, canbus);
+        turretMotor.setCoast();
+
         encoder1 = new CANcoder(TurretConstants.kEncoderId1);
         encoder2 = new CANcoder(TurretConstants.kEncoderId2);
+        
+        double startingPositionTeethRaw = TurretConstants.kZeroPositionTeethRaw;
+
+        CANcoderConfiguration config1 = new CANcoderConfiguration();
+        // Setting this to 1 makes the absolute position
+        // unsigned [0, 1)
+        config1.MagnetSensor.AbsoluteSensorDiscontinuityPoint = 1;
+        config1.MagnetSensor.SensorDirection = SensorDirectionValue.CounterClockwise_Positive;
+
+        // config1.MagnetSensor.MagnetOffset = 0;
+
+        config1.MagnetSensor.MagnetOffset = TurretConstants.kEncoder1MagnetOffset;
+        config1.MagnetSensor.MagnetOffset += (1.0 * startingPositionTeethRaw % TurretConstants.kEncoderGear1Teeth) / TurretConstants.kEncoderGear1Teeth;
+
+        encoder1.getConfigurator().apply(config1); 
+
+        CANcoderConfiguration config2 = new CANcoderConfiguration();
+        config2.MagnetSensor.AbsoluteSensorDiscontinuityPoint = 1;
+        config2.MagnetSensor.SensorDirection = SensorDirectionValue.CounterClockwise_Positive;
+        
+        // config2.MagnetSensor.MagnetOffset = 0;
+        
+        config2.MagnetSensor.MagnetOffset = TurretConstants.kEncoder2MagnetOffset;
+        config2.MagnetSensor.MagnetOffset += (1.0 * startingPositionTeethRaw % TurretConstants.kEncoderGear2Teeth) / TurretConstants.kEncoderGear2Teeth;
+
+        encoder2.getConfigurator().apply(config2); 
 
         // for convenient visual
-        SmartDashboard.putBoolean("Open loop control", false);
+
+        SmartDashboard.putBoolean("Turret open loop control", false);
+        SmartDashboard.putNumber("Turret percent output", 0);
+
         PIDController = new PIDController(
             TurretConstants.kP, TurretConstants.kI, TurretConstants.kD
         );
@@ -93,15 +126,22 @@ public class Turret extends SubsystemBase {
         final int y_2 = TurretConstants.CRTConstants.y_2;
 
         // K; on [0, N)
+        // java calculate remainder, not modulus
+        // so for example -3 % 5 is not 2, but this will make it 2
         final double positionTeethRaw = (N * (c_1 * y_1 + c_2 * y_2)) % N;
-        
-        return positionTeethRaw;
+
+        // if positive, OK, if negative, add the N
+        return positionTeethRaw < 0 ? positionTeethRaw + N : positionTeethRaw;
     }
 
     // get the current angle of the turret in degrees
     public double getAngle() {
+        return getAngle(getCurrentPositionTeethRaw());
+    }
+
+    public double getAngle(double positionTeethRaw) {
         // offset to avoid wrapping problem as discussed with Adam; on [-N/2, N/2)
-        final double positionTeeth = getCurrentPositionTeethRaw() - TurretConstants.kZeroPositionTeethRaw;
+        final double positionTeeth = positionTeethRaw - TurretConstants.kZeroPositionTeethRaw;
         
         // ok, now we know how many gears left/right the turret is from the "forward" position
         // now we need to convert this to degrees
@@ -172,15 +212,11 @@ public class Turret extends SubsystemBase {
         // this part is left as an exercise to the reader
     }
 
-    public void setPercentOutput(double percentAngle) {
-        turretMotor.setPercentOutput(percentAngle);
+    public void setPercentOutput(double output) {
+        turretMotor.setPercentOutput(output);
     }
-
-    @Override
-    public void periodic() {
-        double currentAngle = getAngle();
-        SmartDashboard.putNumber("Turret angle", currentAngle);
-
+    
+    private void handleLimelight(double currentAngle) {
         // pretend this is zero, note this is NOT the camera pose in robot space
         double gyroAngle = 0;
         LimelightHelpers.SetRobotOrientation(
@@ -207,16 +243,29 @@ public class Turret extends SubsystemBase {
         Optional<Pose2d> estimatedPoseMT2 = llTurret.getEstimatedPoseMT2();
         if (estimatedPoseMT2.isPresent())
             fieldMT2.setRobotPose(estimatedPoseMT2.get());
+    }
 
-        if (SmartDashboard.getBoolean("Open loop control", false)) {
-            setPercentOutput(oi.getStrafe());
+    @Override
+    public void periodic() {
+        SmartDashboard.putNumber("Turret encoder 1", encoder1.getAbsolutePosition().getValueAsDouble());
+        SmartDashboard.putNumber("Turret encoder 2", encoder2.getAbsolutePosition().getValueAsDouble());
+
+        double currentPositionTeethRaw = getCurrentPositionTeethRaw();
+        SmartDashboard.putNumber("Turret position teeth raw", currentPositionTeethRaw);
+
+        double currentAngle = getAngle(currentPositionTeethRaw);
+        SmartDashboard.putNumber("Turret angle", currentAngle);
+
+        if (SmartDashboard.getBoolean("Turret open loop control", false)) {
+            setPercentOutput(0.1 * oi.getForward());
+            // setPercentOutput(SmartDashboard.getNumber("Turret percent output", 0));
             return;
         }
         
         double targetAngle = SmartDashboard.getNumber("Turret target angle", 0);
         setAngle(Rotation2d.fromDegrees(targetAngle));
 
-        double error = optimizedDesiredPositionTeethRaw - getCurrentPositionTeethRaw() ;
+        double error = optimizedDesiredPositionTeethRaw - currentPositionTeethRaw;
         
         double voltageOut = PIDController.calculate(error);
         voltageOut += Math.signum(error) * (TurretConstants.kFF + TurretConstants.kS);
@@ -225,5 +274,7 @@ public class Turret extends SubsystemBase {
 
         SmartDashboard.putNumber("Turret error", error);
         SmartDashboard.putNumber("Turret voltage out", voltageOut);
+        
+        // handleLimelight(currentAngle);
     }
 }
