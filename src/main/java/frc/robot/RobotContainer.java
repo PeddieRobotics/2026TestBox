@@ -5,15 +5,17 @@
 package frc.robot;
 
 import frc.robot.subsystems.Flywheel;
+import frc.robot.subsystems.LimelightTurret;
 import frc.robot.subsystems.Turret;
 
-@SuppressWarnings("unused")
 public class RobotContainer {
     // private Flywheel flywheel;
     private Turret turret;
+    private LimelightTurret llTurret;
 
     public RobotContainer() {
         // flywheel = Flywheel.getInstance();
         turret = Turret.getInstance();
+        llTurret = LimelightTurret.getInstance();
     }
 }

@@ -16,30 +16,40 @@ import edu.wpi.first.wpilibj2.command.SubsystemBase;
 import frc.robot.utils.Constants.LimelightConstants;
 import frc.robot.utils.Constants.TurretConstants;
 import frc.robot.utils.Kraken;
-import frc.robot.utils.LimelightHelpers;
-import frc.robot.utils.OI;
+// import frc.robot.utils.LimelightHelpers;
+// import frc.robot.utils.OI;
 
 public class Turret extends SubsystemBase {
     private static Turret turret;
 
-    private OI oi;
-    private Limelight llTurret;
+    // private OI oi;
+    // private Limelight llTurret;
 
     private Kraken turretMotor;
     private CANcoder encoder1, encoder2;
     private PIDController PIDController;
     
     private double optimizedDesiredPositionTeethRaw;
-
+    
+    private double kP = TurretConstants.kP;
+    private double kI = TurretConstants.kI;
+    private double kD = TurretConstants.kD;
+    private double kS = TurretConstants.kS;
+    private double kFF = TurretConstants.kFF;
+    private double kEpsilon = TurretConstants.kEpsilon;
+    private double kVoltageMax = TurretConstants.kVoltageMax;
+    
     private Field2d fieldMT2;
 
     public Turret() {
-        oi = OI.getInstance();
-        llTurret = LimelightTurret.getInstance();
+        // oi = OI.getInstance();
+        // llTurret = LimelightTurret.getInstance();
 
         CANBus canbus = new CANBus();
 
         turretMotor = new Kraken(TurretConstants.kTurretMotorDeviceId, canbus);
+        turretMotor.setStatorCurrentLimit(40);
+        turretMotor.setSupplyCurrentLimit(40);
         turretMotor.setCoast();
 
         encoder1 = new CANcoder(TurretConstants.kEncoderId1);
@@ -53,10 +63,12 @@ public class Turret extends SubsystemBase {
         config1.MagnetSensor.AbsoluteSensorDiscontinuityPoint = 1;
         config1.MagnetSensor.SensorDirection = SensorDirectionValue.CounterClockwise_Positive;
 
-        // config1.MagnetSensor.MagnetOffset = 0;
-
-        config1.MagnetSensor.MagnetOffset = TurretConstants.kEncoder1MagnetOffset;
-        config1.MagnetSensor.MagnetOffset += (1.0 * startingPositionTeethRaw % TurretConstants.kEncoderGear1Teeth) / TurretConstants.kEncoderGear1Teeth;
+        if (TurretConstants.ZEROING_MODE)
+            config1.MagnetSensor.MagnetOffset = 0;
+        else {
+            config1.MagnetSensor.MagnetOffset = TurretConstants.kEncoder1MagnetOffset;
+            config1.MagnetSensor.MagnetOffset += (1.0 * startingPositionTeethRaw % TurretConstants.kEncoderGear1Teeth) / TurretConstants.kEncoderGear1Teeth;
+        }
 
         encoder1.getConfigurator().apply(config1); 
 
@@ -64,21 +76,29 @@ public class Turret extends SubsystemBase {
         config2.MagnetSensor.AbsoluteSensorDiscontinuityPoint = 1;
         config2.MagnetSensor.SensorDirection = SensorDirectionValue.CounterClockwise_Positive;
         
-        // config2.MagnetSensor.MagnetOffset = 0;
-        
-        config2.MagnetSensor.MagnetOffset = TurretConstants.kEncoder2MagnetOffset;
-        config2.MagnetSensor.MagnetOffset += (1.0 * startingPositionTeethRaw % TurretConstants.kEncoderGear2Teeth) / TurretConstants.kEncoderGear2Teeth;
+        if (TurretConstants.ZEROING_MODE)
+            config2.MagnetSensor.MagnetOffset = 0;
+        else {
+            config2.MagnetSensor.MagnetOffset = TurretConstants.kEncoder2MagnetOffset;
+            config2.MagnetSensor.MagnetOffset += (1.0 * startingPositionTeethRaw % TurretConstants.kEncoderGear2Teeth) / TurretConstants.kEncoderGear2Teeth;
+        }
 
         encoder2.getConfigurator().apply(config2); 
 
         // for convenient visual
 
         SmartDashboard.putBoolean("Turret open loop control", false);
-        SmartDashboard.putNumber("Turret percent output", 0);
+        SmartDashboard.putNumber("Turret voltage output", 0);
 
-        PIDController = new PIDController(
-            TurretConstants.kP, TurretConstants.kI, TurretConstants.kD
-        );
+        PIDController = new PIDController(kP, kI, kD);
+
+        SmartDashboard.putNumber("Turret P", kP);
+        SmartDashboard.putNumber("Turret I", kI);
+        SmartDashboard.putNumber("Turret D", kD);
+        SmartDashboard.putNumber("Turret S", kS);
+        SmartDashboard.putNumber("Turret FF", kFF);
+        SmartDashboard.putNumber("Turret Epsilon", kEpsilon);
+        SmartDashboard.putNumber("Turret VoltageMax", kVoltageMax);
         
         SmartDashboard.putNumber("Turret target angle", 0);
         optimizedDesiredPositionTeethRaw = TurretConstants.kZeroPositionTeethRaw;
@@ -215,38 +235,69 @@ public class Turret extends SubsystemBase {
     public void setPercentOutput(double output) {
         turretMotor.setPercentOutput(output);
     }
-    
-    private void handleLimelight(double currentAngle) {
-        // pretend this is zero, note this is NOT the camera pose in robot space
-        double gyroAngle = 0;
-        LimelightHelpers.SetRobotOrientation(
-            LimelightConstants.kTurretLimelightName,
-            gyroAngle, 0,
-            0, 0,
-            0, 0
-        );
+
+    public void setVoltage(double currentPositionTeethRaw, double voltageCCWPlus) {
+        // by default, positive voltage is clockwise, but we do not want it to be
+        double voltageCWPlusForKraken = -voltageCCWPlus;
         
-        // configure in meters
-        double llRadius = 0.1;
+        // if above the "soft limit" only allow movement in direction to unwind turret
+        
+        // below min position = gone all the way clockwise, only counterclockwise allowed
+        if (currentPositionTeethRaw <= TurretConstants.kMinPositionTeethRaw) {
+            turretMotor.setVoltage(voltageCCWPlus >= 0 ? voltageCWPlusForKraken : 0);
+            return;
+        }
 
-        // consider if need negative signs
-        double yawRadians = Math.toRadians(currentAngle);
-        double llForwardOffset = llRadius * Math.cos(yawRadians);
-        double llSideOffset = llRadius * Math.sin(yawRadians);
-        LimelightHelpers.setCameraPose_RobotSpace(
-            LimelightConstants.kTurretLimelightName,
-            llForwardOffset, llSideOffset, 0,
-            // consider if this is CW+ or CCW+, degree or radian
-            0, 0, currentAngle
-        );
+        // above max position = gone all the way counterclockwise, only clockwise allowed
+        if (currentPositionTeethRaw >= TurretConstants.kMaxPositionTeethRaw) {
+            turretMotor.setVoltage(voltageCCWPlus <= 0 ? voltageCWPlusForKraken : 0);
+            return;
+        }
 
-        Optional<Pose2d> estimatedPoseMT2 = llTurret.getEstimatedPoseMT2();
-        if (estimatedPoseMT2.isPresent())
-            fieldMT2.setRobotPose(estimatedPoseMT2.get());
+        turretMotor.setVoltage(voltageCWPlusForKraken);
     }
+    
+    // private void handleLimelight(double currentAngle) {
+    //     // pretend this is zero, note this is NOT the camera pose in robot space
+    //     double gyroAngle = 0;
+    //     LimelightHelpers.SetRobotOrientation(
+    //         LimelightConstants.kTurretLimelightName,
+    //         gyroAngle, 0,
+    //         0, 0,
+    //         0, 0
+    //     );
+        
+    //     // configure in meters
+    //     double llRadius = 0.1;
+
+    //     // consider if need negative signs
+    //     double yawRadians = Math.toRadians(currentAngle);
+    //     double llForwardOffset = llRadius * Math.cos(yawRadians);
+    //     double llSideOffset = llRadius * Math.sin(yawRadians);
+    //     LimelightHelpers.setCameraPose_RobotSpace(
+    //         LimelightConstants.kTurretLimelightName,
+    //         llForwardOffset, llSideOffset, 0,
+    //         // consider if this is CW+ or CCW+, degree or radian
+    //         0, 0, currentAngle
+    //     );
+
+    //     Optional<Pose2d> estimatedPoseMT2 = llTurret.getEstimatedPoseMT2();
+    //     if (estimatedPoseMT2.isPresent())
+    //         fieldMT2.setRobotPose(estimatedPoseMT2.get());
+    // }
 
     @Override
     public void periodic() {
+        kP = SmartDashboard.getNumber("Turret P", 0);
+        kI = SmartDashboard.getNumber("Turret I", 0);
+        kD = SmartDashboard.getNumber("Turret D", 0);
+        kS = SmartDashboard.getNumber("Turret S", 0);
+        kFF = SmartDashboard.getNumber("Turret FF", 0);
+        kEpsilon = SmartDashboard.getNumber("Turret Epsilon", 0);
+        kVoltageMax = SmartDashboard.getNumber("Turret VoltageMax", 0);
+        
+        PIDController.setPID(kP, kI, kD);
+
         SmartDashboard.putNumber("Turret encoder 1", encoder1.getAbsolutePosition().getValueAsDouble());
         SmartDashboard.putNumber("Turret encoder 2", encoder2.getAbsolutePosition().getValueAsDouble());
 
@@ -257,20 +308,26 @@ public class Turret extends SubsystemBase {
         SmartDashboard.putNumber("Turret angle", currentAngle);
 
         if (SmartDashboard.getBoolean("Turret open loop control", false)) {
-            setPercentOutput(0.1 * oi.getForward());
-            // setPercentOutput(SmartDashboard.getNumber("Turret percent output", 0));
+            // setPercentOutput(0.1 * oi.getForward());
+            setVoltage(currentPositionTeethRaw, SmartDashboard.getNumber("Turret voltage output", 0));
             return;
         }
         
         double targetAngle = SmartDashboard.getNumber("Turret target angle", 0);
         setAngle(Rotation2d.fromDegrees(targetAngle));
 
+        SmartDashboard.putNumber("Turret optimized target position", optimizedDesiredPositionTeethRaw);
+
         double error = optimizedDesiredPositionTeethRaw - currentPositionTeethRaw;
         
-        double voltageOut = PIDController.calculate(error);
-        voltageOut += Math.signum(error) * (TurretConstants.kFF + TurretConstants.kS);
+        double voltageOut = 0;
+        if (Math.abs(error) > kEpsilon) {
+            voltageOut = PIDController.calculate(currentPositionTeethRaw, optimizedDesiredPositionTeethRaw);
+            voltageOut += Math.signum(error) * (kFF + kS);
+            voltageOut = Math.min(Math.abs(voltageOut), kVoltageMax) * Math.signum(voltageOut);
+        }
 
-        turretMotor.setVoltage(voltageOut);
+        setVoltage(currentPositionTeethRaw, voltageOut);
 
         SmartDashboard.putNumber("Turret error", error);
         SmartDashboard.putNumber("Turret voltage out", voltageOut);
