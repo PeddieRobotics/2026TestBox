@@ -9,13 +9,13 @@ import frc.robot.subsystems.LimelightTurret;
 import frc.robot.subsystems.Turret;
 
 public class RobotContainer {
-    // private Flywheel flywheel;
-    private Turret turret;
-    private LimelightTurret llTurret;
+    private Flywheel flywheel;
+    // private Turret turret;
+    // private LimelightTurret llTurret;
 
     public RobotContainer() {
-        // flywheel = Flywheel.getInstance();
-        turret = Turret.getInstance();
-        llTurret = LimelightTurret.getInstance();
+        flywheel = Flywheel.getInstance();
+        // turret = Turret.getInstance();
+        // llTurret = LimelightTurret.getInstance();
     }
 }
