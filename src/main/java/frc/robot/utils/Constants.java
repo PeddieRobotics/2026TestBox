@@ -15,8 +15,8 @@ public final class Constants {
         // WHEN SETTING THE MAGNET OFFSET, DO NOT MAKE THESE ZERO
         // SET ZEROING_MODE TO TRUE, VALUES HERE DON'T MATTER
         // negative of "raw absolute position", don't add mod amount offset
-        public static final double kEncoder1MagnetOffset = -0.940918 ;
-        public static final double kEncoder2MagnetOffset = -0.768066 ;
+        public static final double kEncoder1MagnetOffset = -0.428711;
+        public static final double kEncoder2MagnetOffset = -0.805664;
         
         // valid range to not destroy turret is [-kTurretRange, kTurretRange]
         public static final double kTurretRange = 270;
@@ -40,14 +40,14 @@ public final class Constants {
             return teeth * 360 / kTurretGearTeeth;
         }
 
-        public static final double kP = 0.03;
+        public static final double kP = 0.0;
         public static final double kI = 0.0;
         public static final double kD = 0.0;
-        public static final double kS = 0.235;
+        public static final double kS = 0.0;
         public static final double kFF = 0.0;
         
-        public static final double kEpsilon = 1.0;
-        public static final double kVoltageMax = 2;
+        public static final double kEpsilon = 0.0;
+        public static final double kVoltageMax = 0;
         
         // these are always positive, see Turret.java for explanation
         public static final double kMinPositionTeethRaw = positionDegreeToTeeth(-kTurretRange) + kZeroPositionTeethRaw;
