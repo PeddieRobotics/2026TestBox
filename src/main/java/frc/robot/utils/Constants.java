@@ -1,5 +1,7 @@
 package frc.robot.utils;
 
+import com.revrobotics.servohub.ServoChannel.ChannelId;
+
 public final class Constants {
     public static class LimelightConstants {
         public static final String kTurretLimelightName = "limelight-turret";

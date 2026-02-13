@@ -6,16 +6,19 @@ package frc.robot;
 
 import frc.robot.subsystems.Flywheel;
 import frc.robot.subsystems.LimelightTurret;
+import frc.robot.subsystems.Servo;
 import frc.robot.subsystems.Turret;
 
 public class RobotContainer {
-    private Flywheel flywheel;
+    // private Flywheel flywheel;
+    private Servo servo;
     // private Turret turret;
     // private LimelightTurret llTurret;
 
     public RobotContainer() {
-        flywheel = Flywheel.getInstance();
+        // flywheel = Flywheel.getInstance();
         // turret = Turret.getInstance();
         // llTurret = LimelightTurret.getInstance();
+        servo = Servo.getInstance();
     }
 }
