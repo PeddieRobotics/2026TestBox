@@ -75,9 +75,3 @@ public class Servo extends SubsystemBase{
         channel3.setPulseWidth((int)SmartDashboard.getNumber("b3 pulse width", 1500));
     }
 }
-
-// [Servo Hub] IDs: 3, The specified value is not within the valid range 1
-
-
-
-

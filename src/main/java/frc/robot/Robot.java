@@ -1,6 +1,7 @@
 package frc.robot;
 
 import edu.wpi.first.wpilibj.TimedRobot;
+import edu.wpi.first.wpilibj.Timer;
 import edu.wpi.first.wpilibj2.command.CommandScheduler;
 import frc.robot.subsystems.Turret;
 
@@ -9,6 +10,10 @@ public class Robot extends TimedRobot {
 
     public Robot() {
         robotContainer = new RobotContainer();
+        addPeriodic(() -> {
+            System.out.println("Current robot time: "+Timer.getFPGATimestamp());
+        }, 
+        0.005, 0.003);
     }
 
     @Override
