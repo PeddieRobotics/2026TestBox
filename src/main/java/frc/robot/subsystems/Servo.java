@@ -1,23 +1,42 @@
 package frc.robot.subsystems;
 
+import edu.wpi.first.math.controller.PIDController;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.first.wpilibj2.command.SubsystemBase;
 
 import com.revrobotics.servohub.ServoHub;
 import com.revrobotics.servohub.ServoChannel.ChannelId;
 import com.revrobotics.servohub.ServoChannel;
+import com.ctre.phoenix6.CANBus;
+import com.ctre.phoenix6.hardware.CANcoder;
 import com.revrobotics.ResetMode;
 import com.revrobotics.servohub.config.ServoHubConfig;
+import com.revrobotics.spark.SparkClosedLoopController;
 
-public class Servo extends SubsystemBase{
-
+public class Servo extends SubsystemBase {
     private ServoHubConfig config;
     private ServoHub servoHub;
     private ServoChannel channel0, channel1, channel2, channel3, channel4, channel5;
-    public static Servo servo;
+    private static Servo servo;
+
+    private PIDController controller;
+
+    private CANcoder leftCANcoder, rightCANcoder;
+    private CANBus canbus;
+
+    private double kP, kI, kD;
+    private final double kMaxRotation;
 
     public Servo() {
+        
         servoHub = new ServoHub(3);
+
+        canbus = new CANBus("rio");
+        leftCANcoder = new CANcoder(0, canbus);
+        rightCANcoder = new CANcoder(0, canbus);
+
+        leftCANcoder.setPosition(0);
+        rightCANcoder.setPosition(0);
 
         channel0 = servoHub.getServoChannel(ChannelId.kChannelId0);
         channel1 = servoHub.getServoChannel(ChannelId.kChannelId1);
@@ -28,7 +47,7 @@ public class Servo extends SubsystemBase{
 
         channel0.setPowered(true);
         channel0.setEnabled(true);
-        
+
         channel1.setPowered(true);
         channel1.setEnabled(true);
 
@@ -40,44 +59,63 @@ public class Servo extends SubsystemBase{
 
         channel4.setPowered(true);
         channel4.setEnabled(true);
-        
+
         channel5.setPowered(true);
         channel5.setEnabled(true);
 
         config = new ServoHubConfig();
-        config.channel0.pulseRange(500,1500,2500);
-        config.channel1.pulseRange(500,1500,2500);
-        config.channel2.pulseRange(500,1500,2500);
+        config.channel0.pulseRange(500, 1500, 2500);
+        config.channel1.pulseRange(500, 1500, 2500);
+        config.channel2.pulseRange(500, 1500, 2500);
         config.channel3.pulseRange(500, 1500, 2500);
-        config.channel4.pulseRange(500,1500,2500);
-        config.channel5.pulseRange(500,1500,2500);
+        config.channel4.pulseRange(500, 1500, 2500);
+        config.channel5.pulseRange(500, 1500, 2500);
 
-
-        System.out.println("Configure status: " + servoHub.configure(config, ResetMode.kResetSafeParameters).toString());
+        servoHub.configure(config, ResetMode.kResetSafeParameters).toString();
 
         System.out.println("3-5 status: " + servoHub.setBankPulsePeriod(ServoHub.Bank.kBank3_5, 5000).toString());
         System.out.println("0-2 status: " + servoHub.setBankPulsePeriod(ServoHub.Bank.kBank0_2, 5000).toString());
 
-        SmartDashboard.putNumber("b2 pulse width", 1500);
-        SmartDashboard.putNumber("b3 pulse width", 1500);
+        SmartDashboard.putNumber("0-1 desired rotation", 0);
+        SmartDashboard.putNumber("4-5 desired rotation", 0);
+        SmartDashboard.putNumber("kP", 0);
+        SmartDashboard.putNumber("kI", 0);
+        SmartDashboard.putNumber("kD", 0);
+        SmartDashboard.putNumber("CANCoder max rotations", 0);
 
+        kP = SmartDashboard.getNumber("kP", 0.0);
+        kI = SmartDashboard.getNumber("kI", 0.0);
+        kD = SmartDashboard.getNumber("kD", 0.0);
+        kMaxRotation = SmartDashboard.getNumber("CANCoder max rotations", 0);
+
+        controller = new PIDController(kP, kI, kD);
     }
 
     public static Servo getInstance() {
         if (servo == null)
-          servo = new Servo();
+            servo = new Servo();
         return servo;
     }
 
     @Override
     public void periodic() {
-        channel2.setPulseWidth((int)SmartDashboard.getNumber("b2 pulse width", 1500));
-        channel3.setPulseWidth((int)SmartDashboard.getNumber("b3 pulse width", 1500));
+
+        kP = SmartDashboard.getNumber("kP", 0.0);
+        kI = SmartDashboard.getNumber("kI", 0.0);
+        kD = SmartDashboard.getNumber("kD", 0.0); 
+
+        // [-1000, 1000]
+        controller.setPID(kP, kI, kD);
+        int change = (int) controller.calculate(leftCANcoder.getPosition().getValueAsDouble(),
+                SmartDashboard.getNumber("0-1 desired rotation", 0));
+        if (Math.abs(change) > 1000)
+            change = 1000 * (int) Math.signum(change);
+
+        if (leftCANcoder.getPosition().getValueAsDouble() > kMaxRotation
+                || leftCANcoder.getPosition().getValueAsDouble() < 0)
+            change = 0;
+        channel0.setPulseWidth(1500 + change);
+        channel1.setPulseWidth(1500 - change);
+        
     }
 }
-
-// [Servo Hub] IDs: 3, The specified value is not within the valid range 1
-
-
-
-
