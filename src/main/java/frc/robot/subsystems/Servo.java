@@ -24,11 +24,11 @@ public class Servo extends SubsystemBase {
     private CANcoder leftCANcoder, rightCANcoder;
     private CANBus canbus;
 
-    private double kP, kI, kD;
+    private double kS, kP, kI, kD, kEpsilon;
     private final double kMaxRotation;
 
     public Servo() {
-        
+
         servoHub = new ServoHub(3);
 
         canbus = new CANBus("rio");
@@ -77,16 +77,21 @@ public class Servo extends SubsystemBase {
         System.out.println("0-2 status: " + servoHub.setBankPulsePeriod(ServoHub.Bank.kBank0_2, 5000).toString());
 
         SmartDashboard.putNumber("0-1 desired rotation", 0);
-        SmartDashboard.putNumber("4-5 desired rotation", 0);
+        SmartDashboard.putNumber("4-5 desired rotation", 0.5);
         SmartDashboard.putNumber("kP", 0);
         SmartDashboard.putNumber("kI", 0);
         SmartDashboard.putNumber("kD", 0);
-        SmartDashboard.putNumber("CANCoder max rotations", 0);
+        SmartDashboard.putNumber("kEpsilon", 0);
+        SmartDashboard.putNumber("CANCoder max rotations", 5);
+        SmartDashboard.putNumber("change speed", 0);
+        SmartDashboard.putNumber("CANCoder current position", 0);
 
+        kS = 25;
+        kEpsilon = SmartDashboard.getNumber("kEpsilon", 0);
         kP = SmartDashboard.getNumber("kP", 0.0);
         kI = SmartDashboard.getNumber("kI", 0.0);
         kD = SmartDashboard.getNumber("kD", 0.0);
-        kMaxRotation = SmartDashboard.getNumber("CANCoder max rotations", 0);
+        kMaxRotation = 1;
 
         controller = new PIDController(kP, kI, kD);
     }
@@ -100,22 +105,35 @@ public class Servo extends SubsystemBase {
     @Override
     public void periodic() {
 
+        kEpsilon = SmartDashboard.getNumber("kEpsilon", 0.0);
         kP = SmartDashboard.getNumber("kP", 0.0);
         kI = SmartDashboard.getNumber("kI", 0.0);
-        kD = SmartDashboard.getNumber("kD", 0.0); 
+        kD = SmartDashboard.getNumber("kD", 0.0);
 
         // [-1000, 1000]
         controller.setPID(kP, kI, kD);
-        int change = (int) controller.calculate(leftCANcoder.getPosition().getValueAsDouble(),
-                SmartDashboard.getNumber("0-1 desired rotation", 0));
-        if (Math.abs(change) > 1000)
-            change = 1000 * (int) Math.signum(change);
 
-        if (leftCANcoder.getPosition().getValueAsDouble() > kMaxRotation
-                || leftCANcoder.getPosition().getValueAsDouble() < 0)
+        double change = controller.calculate(SmartDashboard.getNumber("CANCoder current position", 0),
+                SmartDashboard.getNumber("4-5 desired rotation", 0));
+
+        change = 1000 * (Math.abs(change) > kMaxRotation ? Math.signum(change) : change);
+        change += kS * Math.signum(change);
+        SmartDashboard.putNumber("change speed", change);
+
+        // if (leftCANcoder.getPosition().getValueAsDouble() > kMaxRotation
+        // || leftCANcoder.getPosition().getValueAsDouble() < 0)
+        // change = 0;
+        // epsilon, kMax (?)
+        double currentDifference = Math.abs(SmartDashboard.getNumber("CANCoder current position", 0)
+                - SmartDashboard.getNumber("4-5 desired rotation", 0));
+        if (currentDifference < kEpsilon
+                || Math.abs(SmartDashboard.getNumber("CANCoder current position", 0)) > kMaxRotation)
             change = 0;
-        channel0.setPulseWidth(1500 + change);
-        channel1.setPulseWidth(1500 - change);
-        
+
+        channel4.setPulseWidth(1500 + (int) change);
+        channel5.setPulseWidth(1500 - (int) change);
+
+        // int currentPosition = ???; // 
+        // SmartDashboard.putNumber("CANCoder current position", currentPosition);
     }
 }
