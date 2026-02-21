@@ -7,11 +7,11 @@ import com.ctre.phoenix6.controls.Follower;
 import com.ctre.phoenix6.controls.MotionMagicTorqueCurrentFOC;
 import com.ctre.phoenix6.controls.MotionMagicVoltage;
 import com.ctre.phoenix6.controls.NeutralOut;
+import com.ctre.phoenix6.controls.PositionDutyCycle;
 import com.ctre.phoenix6.controls.PositionTorqueCurrentFOC;
 import com.ctre.phoenix6.controls.PositionVoltage;
 import com.ctre.phoenix6.controls.VelocityTorqueCurrentFOC;
 import com.ctre.phoenix6.controls.VelocityVoltage;
-import com.ctre.phoenix6.controls.VoltageOut;
 import com.ctre.phoenix6.hardware.TalonFX;
 import com.ctre.phoenix6.signals.FeedbackSensorSourceValue;
 import com.ctre.phoenix6.signals.GravityTypeValue;
@@ -317,6 +317,19 @@ public class Kraken {
      * @param kP - proportional gain (units vary)
      * @param kI - integral gain (units vary)
      * @param kD - derivative gain (units vary)
+     */
+    public void setPIDValues(double kP, double kI, double kD) {
+        config.Slot0.kP = kP;
+        config.Slot0.kI = kI;
+        config.Slot0.kD = kD;
+        talon.getConfigurator().apply(config);
+    }
+
+    /**
+     * set PID values for closed loop setpoint control
+     * @param kP - proportional gain (units vary)
+     * @param kI - integral gain (units vary)
+     * @param kD - derivative gain (units vary)
      * @param kF - constant feedforward to apply (volts)
      */
     public void setPIDValues(double kP, double kI, double kD, double kF) {
@@ -508,6 +521,11 @@ public class Kraken {
         talon.setControl(request);
     }
 
+    public void setPositionDutyCycle(double setpoint, double feedforward) {
+        final PositionDutyCycle request = new PositionDutyCycle(0).withSlot(0);
+        talon.setControl(request.withPosition(setpoint).withFeedForward(feedforward));
+    }
+
     /**
      * Request PID to target position with PositionVoltage control mode
      * @param position - motor/mechanism target position setpoint (post conversion factors)
@@ -515,11 +533,6 @@ public class Kraken {
     public void setPositionVoltage(double position) {
         final PositionVoltage request = new PositionVoltage(0).withSlot(0);
         talon.setControl(request.withPosition(position).withEnableFOC(true));
-    }
-
-    public void setVoltage(double voltage) {
-        final VoltageOut request = new VoltageOut(voltage);
-        talon.setControl(request);
     }
 
     /**
@@ -535,9 +548,9 @@ public class Kraken {
      * Request PID to target position with PositionVoltage control mode and constant voltage feedforward
      * @param position - motor/mechanism target position setpoint (post conversion factors)
      */
-    public void setPositionVoltageWithFeedForward(double position) {
+    public void setPositionVoltageWithFeedForward(double position, double ff) {
         final PositionVoltage request = new PositionVoltage(0).withSlot(0);
-        talon.setControl(request.withPosition(position).withFeedForward(feedForward).withEnableFOC(true));
+        talon.setControl(request.withPosition(position).withFeedForward(ff).withEnableFOC(true));
     }
 
     /**
@@ -583,6 +596,16 @@ public class Kraken {
     public void setPositionMotionMagicTorqueCurrentFOC(double position){
         final MotionMagicTorqueCurrentFOC request = new MotionMagicTorqueCurrentFOC(0).withSlot(0);
         talon.setControl(request.withPosition(position).withFeedForward(feedForward));
+    }
+
+    /**
+     * Request MotionMagic motion profile to target position with MotionMagicTorqueCurrentFOC control mode
+     * @param position - motor/mechanism target position setpoint (post conversion factors)
+     * @param feedforward - TODO: add
+     */
+    public void setPositionMotionMagicTorqueCurrentFOC(double position, double feedforward) {
+        final MotionMagicTorqueCurrentFOC request = new MotionMagicTorqueCurrentFOC(0).withSlot(0);
+        talon.setControl(request.withPosition(position).withFeedForward(feedforward));
     }
 
     /**
@@ -670,3 +693,4 @@ public class Kraken {
         SmartDashboard.putNumber(canbus.getName() + " " + deviceID + " motor", 1);
     }
 }
+
